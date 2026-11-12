@@ -86,14 +86,17 @@ jobs:
       - name: Build toolchain
         run: |
           set -euo pipefail
+          # libc/Makefile includes $(ROOTDIR)/include/configedit.mk, and ROOTDIR
+          # is trunk/ (build_firmware.sh sets it from pwd there)
+          export ROOTDIR="$GITHUB_WORKSPACE/src/trunk"
           cd src/toolchain
-          ROOTDIR="$PWD" ./build_toolchain.sh
+          ./build_toolchain.sh
 
       - name: Build firmware
         run: |
           set -euo pipefail
           cd src/trunk
-          ROOTDIR="$(cd .. && pwd)" ./build_firmware.sh
+          ./build_firmware.sh
 
       - name: Collect images
         run: |
