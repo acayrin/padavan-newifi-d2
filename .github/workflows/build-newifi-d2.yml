@@ -17,7 +17,7 @@ permissions:
 
 env:
   PADAVAN_REPO: https://github.com/OpenPadavan/padavan.git
-  PADAVAN_REF: master
+  PADAVAN_REF: main
 
 jobs:
   build:
