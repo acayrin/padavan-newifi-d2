@@ -1,0 +1,25 @@
+#!/bin/sh
+# Expand the compressed tailscaled into tmpfs at boot.
+# The binary is ~19.8 MB raw and cannot live on the read-only squashfs,
+# so only the ~4.4 MB xz blob is stored and unpacked into RAM.
+
+XB=/usr/sbin/tailscaled.xz
+TB=/tmp/tailscaled
+
+[ -x "$TB" ] && exit 0
+[ -f "$XB" ] || exit 0
+
+mkdir -p /var/run/tailscale
+
+# /tmp is a small tmpfs by default; grow it while RAM allows.
+need=$((20 * 1024 * 1024))
+free=$(df -k /tmp 2>/dev/null | awk 'NR==2 {print $4 * 1024}')
+if [ -n "$free" ] && [ "$free" -lt "$need" ]; then
+	mount -o remount,size=192M /tmp 2>/dev/null || \
+		mount -t tmpfs -o size=192M tmpfs /tmp 2>/dev/null
+fi
+
+xz -d -c "$XB" > "$TB.$$" || { rm -f "$TB.$$"; logger -t tailscale "decompress failed"; exit 1; }
+chmod 0755 "$TB.$$"
+mv -f "$TB.$$" "$TB"
+logger -t tailscale "tailscaled expanded to $TB"

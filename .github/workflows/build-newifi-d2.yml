@@ -73,7 +73,10 @@ jobs:
             echo "${{ inputs.tailscale_sha256 }}  /tmp/tailscaled" | sha256sum -c -
           fi
           file /tmp/tailscaled
+          # stored raw in the tree; the package Makefile xz-compresses it into
+          # the image (~4.4 MB) and tailscaled-boot expands it at boot
           install -m 0755 /tmp/tailscaled src/trunk/user/tailscale/tailscaled
+          ls -l src/trunk/user/tailscale/
 
       - name: Drop tailscale pkg when no binary
         run: |
