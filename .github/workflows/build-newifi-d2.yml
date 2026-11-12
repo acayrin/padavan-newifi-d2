@@ -83,18 +83,32 @@ jobs:
             sed -i '/^dir_y.*+= tailscale$/d' src/trunk/user/Makefile
           fi
 
+      - name: Restore toolchain
+        id: tccache
+        uses: actions/cache@v4
+        with:
+          path: src/toolchain/out
+          key: tc-newifi-d2-${{ hashFiles('overlay/**') }}-v1
+
       - name: Build toolchain
+        if: steps.tccache.outputs.cache-hit != 'true'
         run: |
           set -euo pipefail
           # libc/Makefile includes $(ROOTDIR)/include/configedit.mk, and ROOTDIR
           # is trunk/ (build_firmware.sh sets it from pwd there)
           export ROOTDIR="$GITHUB_WORKSPACE/src/trunk"
+          # build_toolchain.sh sets CONFIG_TOOLCHAIN_DIR='${ROOTDIR}/out' in
+          # single quotes, so it never expands. Force the real path; the
+          # firmware step expects <repo>/toolchain/out.
+          export CONFIG_TOOLCHAIN_DIR="$GITHUB_WORKSPACE/src/toolchain/out"
           cd src/toolchain
           ./build_toolchain.sh
+          ls -d "$CONFIG_TOOLCHAIN_DIR"/mipsel-linux-uclibc/sysroot/lib/libuClibc-*.so
 
       - name: Build firmware
         run: |
           set -euo pipefail
+          export CONFIG_TOOLCHAIN_DIR="$GITHUB_WORKSPACE/src/toolchain/out"
           cd src/trunk
           ./build_firmware.sh
 
