@@ -1,25 +1,55 @@
 #!/bin/sh
 # Expand the compressed tailscaled into tmpfs at boot.
-# The binary is ~19.8 MB raw and cannot live on the read-only squashfs,
-# so only the ~6.2 MB gzip blob is stored and unpacked into RAM.
+#
+# The binary is ~19.8 MB raw and cannot live on the read-only squashfs, so
+# only the ~6.2 MB gzip blob is stored and unpacked into RAM.
+#
+# /tmp is a 24 MB tmpfs, so two concurrent runs (rc.c and a storage script)
+# each try to write 19.8 MB and both die with "No space left on device".
+# Serialize with a lock and write to a temp file that is removed on failure.
 
 XB=/usr/sbin/tailscaled.gz
 TB=/tmp/tailscaled
+LOCK=/tmp/.tailscaled-boot.lock
 
 [ -x "$TB" ] && exit 0
 [ -f "$XB" ] || exit 0
 
-mkdir -p /var/run/tailscale
+# mkdir is atomic, so it works as a lock without extra tools.
+acquire() {
+	i=0
+	while ! mkdir "$LOCK" 2>/dev/null; do
+		# winner finished already
+		[ -x "$TB" ] && exit 0
+		i=$((i + 1))
+		[ $i -gt 60 ] && rm -rf "$LOCK" && break
+		sleep 1
+	done
+}
+release() { rmdir "$LOCK" 2>/dev/null; }
+trap release EXIT
 
-# /tmp is a 24 MB tmpfs by default; grow it while RAM allows.
-need=$((20 * 1024 * 1024))
-free=$(df -k /tmp 2>/dev/null | awk 'NR==2 {print $4 * 1024}')
-if [ -n "$free" ] && [ "$free" -lt "$need" ]; then
+acquire
+
+# Re-check after taking the lock: the other process may have finished it.
+[ -x "$TB" ] && exit 0
+
+# Make room. The blob unpacks to ~19.8 MB and /tmp is 24 MB by default,
+# which is too tight once anything else is in there.
+free=$(df -k /tmp 2>/dev/null | awk 'NR==2 {print $4}')
+if [ -z "$free" ] || [ "$free" -lt 22528 ]; then
 	mount -o remount,size=192M /tmp 2>/dev/null || \
 		mount -t tmpfs -o size=192M tmpfs /tmp 2>/dev/null
 fi
 
-gzip -dc "$XB" > "$TB.$$" || { rm -f "$TB.$$"; logger -t tailscale "decompress failed"; exit 1; }
-chmod 0755 "$TB.$$"
-mv -f "$TB.$$" "$TB"
-logger -t tailscale "tailscaled expanded to $TB"
+TMP="$TB.$$"
+rm -f "$TMP"
+if gzip -dc "$XB" > "$TMP"; then
+	chmod 0755 "$TMP"
+	mv -f "$TMP" "$TB"
+	logger -t tailscale "tailscaled expanded to $TB"
+else
+	rm -f "$TMP"
+	logger -t tailscale "decompress failed"
+	exit 1
+fi
