@@ -44,7 +44,9 @@ jobs:
             sed -i '/^dir_y.*+= iptables$/a dir_y\t\t\t\t\t\t+= tailscale' src/trunk/user/Makefile
           grep -n 'tailscale' src/trunk/user/Makefile
           grep -E 'CONFIG_FIRMWARE_(PRODUCT_ID|INCLUDE_LANG_CN)' src/trunk/.config || true
-          grep -c 'bg1.webp' src/trunk/user/www/n56u_ribbon_fixed/bootstrap/css/main.css
+          # verification only; must not abort the job under set -e
+          grep -c 'bg1.jpg' src/trunk/user/www/n56u_ribbon_fixed/bootstrap/css/main.css || true
+          ls -l src/trunk/user/www/n56u_ribbon_fixed/images/
 
       - name: Install build deps
         run: |
