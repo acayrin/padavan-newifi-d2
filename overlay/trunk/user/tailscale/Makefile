@@ -1,9 +1,11 @@
-# Ships tailscaled as an xz blob (~4.4 MB vs 19.8 MB raw) in the read-only
+# Ships tailscaled as a gzip blob (~6.2 MB vs 19.8 MB raw) in the read-only
 # rootfs; tailscaled-boot expands it into tmpfs on each boot.
 #
-# The hook is installed into /etc/storage/... only via the storage seed, so
-# instead we call it from mtd_storage.sh's func_start_apps(), which runs on
-# every boot after the storage partition is mounted (see patch file).
+# gzip is used rather than xz because Padavan's busybox has no xz/unxz applet,
+# only gzip/zcat/bzcat.
+#
+# The boot hook lives in mtd_storage.sh func_start_apps(), which runs on every
+# boot after the storage partition is mounted.
 
 all:
 	@:
@@ -14,9 +16,9 @@ romfs:
 		exit 0; \
 	fi
 	@mkdir -p $(INSTALLDIR)/usr/sbin
-	xz -9 -T0 -c tailscaled > $(INSTALLDIR)/usr/sbin/tailscaled.xz
-	chmod 0644 $(INSTALLDIR)/usr/sbin/tailscaled.xz
+	gzip -9 -c tailscaled > $(INSTALLDIR)/usr/sbin/tailscaled.gz
+	chmod 0644 $(INSTALLDIR)/usr/sbin/tailscaled.gz
 	$(ROMFSINST) -p +x /usr/sbin/tailscaled-boot
-	@ls -l $(INSTALLDIR)/usr/sbin/tailscaled.xz
+	@ls -l $(INSTALLDIR)/usr/sbin/tailscaled.gz
 
 clean:
