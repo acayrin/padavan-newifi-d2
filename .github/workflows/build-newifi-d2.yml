@@ -1,0 +1,122 @@
+name: build-newifi-d2
+
+on:
+  workflow_dispatch:
+    inputs:
+      tailscale_url:
+        description: 'Direct URL of the tailscaled mipsle binary (e.g. a release asset). Empty = build without it.'
+        required: false
+        type: string
+      tailscale_sha256:
+        description: 'sha256 of that binary; verified when provided'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  PADAVAN_REPO: https://github.com/OpenPadavan/padavan.git
+  PADAVAN_REF: master
+
+jobs:
+  build:
+    name: Padavan NEWIFI-D2 (English + tailscaled + custom bg)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout overlay
+        uses: actions/checkout@v4
+
+      - name: Clone Padavan source
+        run: |
+          set -euo pipefail
+          git clone --depth=1 --branch "${PADAVAN_REF}" "${PADAVAN_REPO}" src
+          git -C src rev-parse --short HEAD
+
+      - name: Apply overlay
+        run: |
+          set -euo pipefail
+          cp -a overlay/. src/
+          cp src/trunk/configs/templates/newifi/newifi-d2-ci.config src/trunk/.config
+          python3 - <<'PY'
+          p = 'src/trunk/user/Makefile'
+          s = open(p).read()
+          anchor = 'dir_y\t\t\t\t\t\t+= iptables\n'
+          if 'tailscale' not in s and anchor in s:
+              s = s.replace(anchor, anchor + 'dir_y\t\t\t\t\t\t+= tailscale\n', 1)
+              open(p, 'w').write(s)
+          print('tailscale registered:', 'tailscale' in open(p).read())
+          PY
+          grep -E 'CONFIG_FIRMWARE_(PRODUCT_ID|INCLUDE_LANG_CN)' src/trunk/.config || true
+          grep -c 'bg1.webp' src/trunk/user/www/n56u_ribbon_fixed/bootstrap/css/main.css
+
+      - name: Install build deps
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            autoconf autoconf-archive automake autopoint bison build-essential \
+            ca-certificates cmake cpio curl dos2unix doxygen fakeroot flex gawk \
+            gettext git gperf help2man kmod libarchive-tools libblkid-dev \
+            libc-ares-dev libcurl4-openssl-dev libdevmapper-dev libev-dev \
+            libevent-dev libexif-dev libflac-dev libgmp3-dev libid3tag0-dev \
+            libidn2-dev libjpeg-dev libkeyutils-dev libltdl-dev libmpc-dev \
+            libmpfr-dev libncurses5-dev libogg-dev libsqlite3-dev libssl-dev \
+            libsystemd-dev libtool libtool-bin libudev-dev libunbound-dev \
+            libvorbis-dev libxml2-dev locales nano pkg-config ppp-dev \
+            python3 python3-docutils texinfo unzip uuid uuid-dev vim wget xxd \
+            zlib1g-dev zstd
+          sudo locale-gen --no-purge en_US.UTF-8 || true
+
+      - name: Fetch tailscaled
+        if: inputs.tailscale_url != ''
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/tailscaled "${{ inputs.tailscale_url }}"
+          if [ -n "${{ inputs.tailscale_sha256 }}" ]; then
+            echo "${{ inputs.tailscale_sha256 }}  /tmp/tailscaled" | sha256sum -c -
+          fi
+          file /tmp/tailscaled
+          install -m 0755 /tmp/tailscaled src/trunk/user/tailscale/tailscaled
+
+      - name: Drop tailscale pkg when no binary
+        run: |
+          set -euo pipefail
+          if [ ! -f src/trunk/user/tailscale/tailscaled ]; then
+            echo "::notice::no tailscaled provided; building without it"
+            python3 - <<'PY'
+            p = 'src/trunk/user/Makefile'
+            s = open(p).read().replace('dir_y\t\t\t\t\t\t+= tailscale\n', '')
+            open(p, 'w').write(s)
+            PY
+          fi
+
+      - name: Build toolchain
+        run: |
+          set -euo pipefail
+          cd src/toolchain
+          ROOTDIR="$PWD" ./build_toolchain.sh
+
+      - name: Build firmware
+        run: |
+          set -euo pipefail
+          cd src/trunk
+          ROOTDIR="$(cd .. && pwd)" ./build_firmware.sh
+
+      - name: Collect images
+        run: |
+          set -euo pipefail
+          ls -l src/trunk/images/ || true
+          mkdir -p out
+          find src/trunk/images -maxdepth 1 -name '*.trx' -exec cp -v {} out/ \;
+          ls -l out/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: newifi-d2-padavan
+          path: out/*
+          if-no-files-found: error
+          retention-days: 30
