@@ -40,15 +40,9 @@ jobs:
           set -euo pipefail
           cp -a overlay/. src/
           cp src/trunk/configs/templates/newifi/newifi-d2-ci.config src/trunk/.config
-          python3 - <<'PY'
-          p = 'src/trunk/user/Makefile'
-          s = open(p).read()
-          anchor = 'dir_y\t\t\t\t\t\t+= iptables\n'
-          if 'tailscale' not in s and anchor in s:
-              s = s.replace(anchor, anchor + 'dir_y\t\t\t\t\t\t+= tailscale\n', 1)
-              open(p, 'w').write(s)
-          print('tailscale registered:', 'tailscale' in open(p).read())
-          PY
+          grep -q '^dir_y.*tailscale' src/trunk/user/Makefile || \
+            sed -i '/^dir_y.*+= iptables$/a dir_y\t\t\t\t\t\t+= tailscale' src/trunk/user/Makefile
+          grep -n 'tailscale' src/trunk/user/Makefile
           grep -E 'CONFIG_FIRMWARE_(PRODUCT_ID|INCLUDE_LANG_CN)' src/trunk/.config || true
           grep -c 'bg1.webp' src/trunk/user/www/n56u_ribbon_fixed/bootstrap/css/main.css
 
@@ -86,11 +80,7 @@ jobs:
           set -euo pipefail
           if [ ! -f src/trunk/user/tailscale/tailscaled ]; then
             echo "::notice::no tailscaled provided; building without it"
-            python3 - <<'PY'
-            p = 'src/trunk/user/Makefile'
-            s = open(p).read().replace('dir_y\t\t\t\t\t\t+= tailscale\n', '')
-            open(p, 'w').write(s)
-            PY
+            sed -i '/^dir_y.*+= tailscale$/d' src/trunk/user/Makefile
           fi
 
       - name: Build toolchain
