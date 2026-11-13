@@ -162,8 +162,15 @@ hwnat_exclusive()
     local mode=$(nvram get hw_nat_mode)
     log "hardware NAT enabled (hw_nat_mode=$mode), disabling it"
 
-    # hw_nat_mode=2 means disabled for is_hwnat_allow() in rc/net.c
-    [ "$mode" = "2" ] || { nvram set hw_nat_mode=2; nvram commit; }
+    # hw_nat_mode=2 means disabled for is_hwnat_allow() in rc/net.c.
+    # Remember the previous value so hwnat_restore() can put it back: once we
+    # overwrite it, "2" is ambiguous between "user wants it off" and
+    # "zapret turned it off".
+    if [ "$mode" != "2" ]; then
+        nvram set hw_nat_mode_saved="$mode"
+        nvram set hw_nat_mode=2
+        nvram commit
+    fi
 
     # Drop the module so already-offloaded flows stop bypassing netfilter.
     rmmod hw_nat >/dev/null 2>&1
@@ -482,11 +489,45 @@ start_service()
     firewall_start
 }
 
+hwnat_restore()
+{
+    # Counterpart to hwnat_exclusive(): re-enable hardware NAT when DPI is
+    # switched off. Without this, disabling zapret left the router in the
+    # slower software-forwarding state (measured 0% -> 25% CPU) until a reboot,
+    # because nothing ever set hw_nat_mode back.
+    #
+    # Restore the value hwnat_exclusive() saved. Without a saved value the user
+    # had HNAT off already, so leave it alone.
+    local mode=$(nvram get hw_nat_mode_saved)
+
+    if [ -z "$mode" ] || [ "$mode" = "2" ]; then
+        log "hardware NAT not restored (no saved mode)"
+        return 0
+    fi
+
+    nvram set hw_nat_mode="$mode"
+    nvram unset hw_nat_mode_saved
+    nvram commit
+
+    [ -e /sys/module/hw_nat ] && return 0
+
+    log "restoring hardware NAT (hw_nat_mode=$mode)"
+    # Parameters must match what rc/net.c's hwnat_load() passes; a bare
+    # modprobe defaults wifi_offload to 0 and silently disables WLAN offload.
+    modprobe hw_nat wifi_offload=1 udp_offload=1 wan_vid=2 >/dev/null 2>&1
+    [ -e /sys/module/hw_nat ] || log "failed to load hw_nat"
+    return 0
+}
+
 stop_service()
 {
     firewall_stop
     killall -q -s 15 $(basename "$NFQWS_BIN") && log "stopped"
     rm -f "$PID_FILE"
+
+    # Only restore on a real stop. "restart" also calls stop_service, and
+    # restoring there would just be undone by start_service moments later.
+    [ "$ZAPRET_RESTART" ] || hwnat_restore
 }
 
 reload_service()
@@ -650,6 +691,7 @@ case "$1" in
     ;;
 
     restart)
+        ZAPRET_RESTART=1
         stop_service
         start_service
     ;;
