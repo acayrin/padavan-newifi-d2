@@ -31,7 +31,7 @@ $j(document).ready(function() {
 
 function initial(){
 	show_banner(1);
-	show_menu(5,7,8);
+	show_menu(5,7,7);
 	show_footer();
 	change_adblock_enabled();
 }
