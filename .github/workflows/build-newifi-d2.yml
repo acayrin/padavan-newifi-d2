@@ -47,6 +47,15 @@ jobs:
         run: |
           set -euo pipefail
           cp -a overlay/. src/
+
+          # The web UI is installed with `cp -R`, so pages cannot be excluded by
+          # the overlay (which can only add or overwrite). Delete the ones for
+          # features this build no longer ships, so they are not reachable by
+          # direct URL with dead controls behind them.
+          rm -f src/trunk/user/www/n56u_ribbon_fixed/Advanced_Printer_others.asp
+          rm -f src/trunk/user/www/n56u_ribbon_fixed/Advanced_Modem_others.asp
+          rm -f src/trunk/user/www/n56u_ribbon_fixed/modem_isp.js
+          rm -f src/trunk/user/www/n56u_ribbon_fixed/Advanced_Services_Zapret.asp
           cp src/trunk/configs/templates/newifi/newifi-d2-ci.config src/trunk/.config
           grep -q '^dir_y.*tailscale' src/trunk/user/Makefile || \
             sed -i '/^dir_y.*+= iptables$/a dir_y\t\t\t\t\t\t+= tailscale' src/trunk/user/Makefile

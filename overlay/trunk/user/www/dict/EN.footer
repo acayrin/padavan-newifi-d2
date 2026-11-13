@@ -1856,9 +1856,6 @@ VPNC_RNet_List=List of remote IP addresses/subnets behind the VPN server
 Connecting=Connecting
 ZapretAllowedClients=List of allowed client IP addresses
 ZapretWORestrictions=Without restrictions
-# Upstream ships Advanced_Services_Zapret.asp but never defines this key, so the
-# page header renders a literal #Services_Menu_5# when opened directly.
-Services_Menu_5=Zapret
 Adblock_Menu=Ad Block
 Adblock_desc=Blocks advertising and tracking domains for every device on the network through DNS. Blocked names answer with 0.0.0.0 and :: instead of refusing the query, so applications fail to connect and move on rather than retrying. Lists are fetched daily into RAM and are not stored on flash.
 Adblock_Enable=Enable ad blocking
