@@ -110,11 +110,25 @@ build()
 
 reload_dnsmasq()
 {
-	[ -f "$HOSTS" ] || return 0
-	# SIGHUP makes dnsmasq re-read hosts files without dropping the cache or
-	# interrupting DHCP.
-	local pid=$(cat /var/run/dnsmasq.pid 2>/dev/null)
-	[ -n "$pid" ] && kill -HUP "$pid" 2>/dev/null
+	# dnsmasq does NOT re-read addn-hosts on SIGHUP in this build: measured by
+	# appending a unique domain and sending SIGHUP, after which the name still
+	# resolved upstream. It also cannot be replaced by killall alone, because
+	# the old process keeps the listening socket and the new one dies with
+	# "failed to create listening socket ... Address already in use".
+	#
+	# So restart it through rc, which tears down and brings the service back in
+	# the right order. On a freshly booted box dnsmasq may not be up yet; that
+	# is fine, rc will read the new list when it starts.
+	if [ ! -f "$HOSTS" ]; then
+		# list removed: still needs a restart for the removal to take effect
+		[ -z "$(nvram get adblock_enable)" ] || true
+	fi
+
+	if [ -x /sbin/rc ]; then
+		/sbin/rc restart_dnsmasq >/dev/null 2>&1
+	else
+		killall -q dnsmasq 2>/dev/null
+	fi
 }
 
 case "$1" in
