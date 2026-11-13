@@ -578,6 +578,7 @@
 			{"adblock_enable", "", NULL, EVM_RESTART_FIREWALL},
 			{"adblock_lists", "", NULL, EVM_RESTART_FIREWALL},
 			{"adblock_entries", "", NULL, 0},
+			{"adblock_defaults", "", NULL, 0},
 			{"zapretc.post_script.sh", "File", NULL, EVM_BLOCK_UNSAFE},
 #endif
 #if defined(APP_TOR)

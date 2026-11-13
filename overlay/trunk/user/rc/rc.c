@@ -939,6 +939,9 @@ init_router(void)
 	// the fetch can take a few seconds on a slow link, and dnsmasq simply has
 	// no extra hosts file until it lands.
 	if (access("/usr/sbin/adblock.sh", X_OK) == 0) {
+		// Publish the default list URLs first: the web UI shows them as the
+		// textarea placeholder, and nvram is not persistent across a reflash.
+		system("/usr/sbin/adblock.sh defaults");
 		system("/usr/sbin/adblock.sh start &");
 		// /var is tmpfs, so the daily refresh entry must be rewritten each boot
 		system("/usr/sbin/adblock-cron.sh &");

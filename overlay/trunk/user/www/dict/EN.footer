@@ -1881,3 +1881,4 @@ Adblock_Status=Status
 Adblock_Entries=Block list
 Adblock_LastUpdate=Refresh schedule
 Adblock_Lists=Block list sources
+Adblock_ListsHint=One hosts-format URL per line. Leave empty to use the greyed-out defaults shown above.

@@ -31,6 +31,14 @@ https://raw.githubusercontent.com/PolishFiltersTeam/KADhosts/master/KADhosts.txt
 # AdAway, StevenBlack and most "adblock hosts" mirrors publish.
 get_lists()
 {
+	# Publish the defaults for the UI placeholder, so the addresses are defined
+	# only here rather than duplicated in the page.
+	# Comma separated rather than newlines: HTML normalises newlines inside an
+	# attribute to spaces, which would run the URLs together in the textarea
+	# placeholder. built with tr/awk because busybox has no paste.
+	nvram set adblock_defaults="$(echo $DEFAULT_LISTS | tr -s ' \t' '\n' \
+		| sed '/^$/d' | awk 'NR>1 {printf ", "} {printf "%s", $0}')"
+
 	local custom
 	custom=$(nvram get adblock_lists 2>/dev/null)
 	custom=$(echo "$custom" | tr ',;' '\n\n')
@@ -150,8 +158,13 @@ case "$1" in
 			echo "disabled"
 		fi
 		;;
+	defaults)
+		# Used to fill the UI placeholder, so the addresses exist in exactly
+		# one place (this script) instead of being duplicated in the page.
+		get_lists
+		;;
 	*)
-		echo "Usage: $0 {start|stop|update|status}"
+		echo "Usage: $0 {start|stop|update|status|defaults}"
 		exit 1
 		;;
 esac

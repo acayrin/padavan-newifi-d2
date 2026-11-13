@@ -142,8 +142,8 @@ function done_validating(action){
                                         <tr>
                                             <th><#Adblock_Lists#></th>
                                             <td>
-                                                <textarea rows="6" wrap="off" spellcheck="false" maxlength="4096" class="span12" style="resize: vertical; font-family: monospace; font-size: 12px;" name="adblock_lists"><% nvram_get_x("", "adblock_lists"); %></textarea>
-                                                <span style="color:#888;">One hosts-format URL per line. Leave empty for the built-in list.</span>
+                                                <textarea rows="6" wrap="off" spellcheck="false" maxlength="4096" class="span12" style="resize: vertical; font-family: monospace; font-size: 12px;" name="adblock_lists" placeholder="<% nvram_get_x("", "adblock_defaults"); %>"><% nvram_get_x("", "adblock_lists"); %></textarea>
+                                                <span style="color:#888;"><#Adblock_ListsHint#></span>
                                             </td>
                                         </tr>
                                     </table>
