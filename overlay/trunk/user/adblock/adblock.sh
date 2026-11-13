@@ -151,7 +151,9 @@ case "$1" in
 
 		# rc starts this early, often before the WAN has a DHCP lease. Wait for
 		# a default route and retry, rather than giving up on an empty list.
-		local try=0
+		# NOTE: no 'local' here - this is a case branch, not a function, and
+		# busybox ash rejects 'local' outside a function.
+		try=0
 		while [ $try -lt 12 ]; do
 			if fetch_all; then
 				build
