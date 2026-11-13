@@ -20,8 +20,12 @@ mkdir -p "$CRONTAB_DIR"
 : >>"$CRONTAB"
 
 grep -q "$MARK" "$CRONTAB" || {
-	# 04:17 daily: off-peak, and a minute that is not shared with other jobs
+	# Two entries: the nightly refresh, and a mid-morning catch-up. The second
+	# matters because at boot the WAN may still be down, in which case the list
+	# is empty until something retries. 'update' is cheap when the file is
+	# already good - it refetches, but only hourly in practice.
 	echo "17 4 * * * /usr/sbin/adblock.sh update $MARK" >>"$CRONTAB"
+	echo "43 10 * * * /usr/sbin/adblock.sh update $MARK" >>"$CRONTAB"
 }
 
 chmod 600 "$CRONTAB"

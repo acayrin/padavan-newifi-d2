@@ -58,18 +58,24 @@ fetch_all()
 	mkdir -p "$DIR"
 	: >"$DIR/raw.tmp"
 
-	local url
+	local url ok=0
 	LISTS=$(get_lists)
 	for url in $LISTS; do
 		# -q quiet, follow redirects, short timeouts so boot is not delayed
 		if wget -q -T20 -O "$DIR/part.tmp" "$url" 2>/dev/null; then
 			cat "$DIR/part.tmp" >>"$DIR/raw.tmp"
+			ok=$((ok + 1))
 			log "fetched $url"
 		else
 			log "FAILED $url"
 		fi
 	done
 	rm -f "$DIR/part.tmp"
+
+	# At boot the WAN may not have a lease yet, in which case every fetch fails.
+	# Report that instead of silently building an empty blocklist, so the
+	# caller can retry once the interface is up.
+	[ $ok -gt 0 ]
 }
 
 build()
@@ -142,9 +148,29 @@ reload_dnsmasq()
 case "$1" in
 	start|update)
 		[ "$(nvram get adblock_enable)" = "1" ] || { log "disabled"; exit 0; }
-		fetch_all
-		build
-		reload_dnsmasq
+
+		# rc starts this early, often before the WAN has a DHCP lease. Wait for
+		# a default route and retry, rather than giving up on an empty list.
+		local try=0
+		while [ $try -lt 12 ]; do
+			if fetch_all; then
+				build
+				reload_dnsmasq
+				exit 0
+			fi
+			try=$((try + 1))
+			if [ "$1" = "update" ]; then
+				# cron runs when the link is already up; no need to wait long
+				[ $try -ge 2 ] && break
+			fi
+			log "fetch attempt $try failed, retrying in 20s"
+			sleep 20
+		done
+
+		log "no list could be fetched"
+		# Never replace a working list with an empty one.
+		[ -f "$HOSTS" ] && exit 0
+		exit 1
 		;;
 	stop)
 		rm -f "$HOSTS"
