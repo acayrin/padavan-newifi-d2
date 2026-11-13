@@ -575,6 +575,7 @@
 			{"zapretc.exclude.list", "File", NULL, EVM_BLOCK_UNSAFE},
 			{"zapretc.ipset.list", "File", NULL, EVM_RESTART_ZAPRET|EVM_BLOCK_UNSAFE},
 			{"zapretc.ipset-exclude.list", "File", NULL, EVM_RESTART_ZAPRET|EVM_BLOCK_UNSAFE},
+			{"adblock_enable", "", NULL, EVM_RESTART_FIREWALL},
 			{"zapretc.post_script.sh", "File", NULL, EVM_BLOCK_UNSAFE},
 #endif
 #if defined(APP_TOR)

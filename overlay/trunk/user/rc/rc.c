@@ -934,6 +934,15 @@ init_router(void)
 	// connectivity and retries, so a cold boot with no WAN converges.
 	if (access("/usr/sbin/tailscale-init", X_OK) == 0)
 		system("/usr/sbin/tailscale-init &");
+
+	// Build the ad-block list before dnsmasq starts serving it. Backgrounded:
+	// the fetch can take a few seconds on a slow link, and dnsmasq simply has
+	// no extra hosts file until it lands.
+	if (access("/usr/sbin/adblock.sh", X_OK) == 0) {
+		system("/usr/sbin/adblock.sh start &");
+		// /var is tmpfs, so the daily refresh entry must be rewritten each boot
+		system("/usr/sbin/adblock-cron.sh &");
+	}
 }
 
 /*
