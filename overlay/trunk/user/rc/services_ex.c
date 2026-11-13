@@ -390,13 +390,15 @@ start_dns_dhcpd(int is_ap_mode)
 		fprintf(fp, "dns-forward-max=%d\n", DNS_RELAY_QUERIES_MAX);
 		fprintf(fp, "addn-hosts=%s/hosts\n", storage_dir);
 		/*
-		 * Ad-block list. dnsmasq treats a directory here as "read every file
-		 * in it", so the blocklist lives in its own file under tmpfs and the
-		 * user's persisted hosts above is left alone. Only added when the
-		 * feature is on, so disabling it needs no file cleanup to take effect.
+		 * Ad-block list, pointed at the FILE rather than its directory.
+		 * dnsmasq 2.93 here is built no-inotify, and the directory form did
+		 * not take effect: a one-entry file worked while addn-hosts=<dir>
+		 * was silently ignored. Keeping it a separate file still leaves the
+		 * user's persisted hosts above untouched, and the entry is only
+		 * emitted when the feature is on, so disabling needs no cleanup.
 		 */
 		if (nvram_match("adblock_enable", "1"))
-			fprintf(fp, "addn-hosts=%s\n", ADBLOCK_DIR);
+			fprintf(fp, "addn-hosts=%s/hosts\n", ADBLOCK_DIR);
 		fprintf(fp, "servers-file=%s\n", DNS_SERVERS_FILE);
 		fprintf(fp, "dhcp-hostsfile=%s/dhcp.conf\n", storage_dir);
 	} else {

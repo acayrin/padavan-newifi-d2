@@ -17,13 +17,31 @@ DIR=/tmp/adblock
 HOSTS="$DIR/hosts"
 LOG=/tmp/adblock.log
 
-# Upstream lists. Kept small on purpose - a 4 MB /var tmpfs and 128 MB RAM
-# mean a multi-million-entry list would be counterproductive.
-LISTS="
+# Default upstream lists, used when nvram adblock_lists is empty. Kept small
+# on purpose: the router has limited RAM, and a multi-million-entry list would
+# cost more than it saves.
+DEFAULT_LISTS="
 https://adaway.org/hosts.txt
 https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts
 https://raw.githubusercontent.com/PolishFiltersTeam/KADhosts/master/KADhosts.txt
 "
+
+# adblock_lists in nvram overrides the defaults: one URL per line (commas or
+# spaces also work). Anything hosts-format is accepted, which is what AdGuard,
+# AdAway, StevenBlack and most "adblock hosts" mirrors publish.
+get_lists()
+{
+	local custom
+	custom=$(nvram get adblock_lists 2>/dev/null)
+	custom=$(echo "$custom" | tr ',;' '\n\n')
+	if [ -n "$(echo "$custom" | tr -d ' \t\n')" ]; then
+		echo "$custom"
+	else
+		echo "$DEFAULT_LISTS"
+	fi
+}
+
+LISTS=""
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S') $*" >>"$LOG"; }
 
@@ -33,6 +51,7 @@ fetch_all()
 	: >"$DIR/raw.tmp"
 
 	local url
+	LISTS=$(get_lists)
 	for url in $LISTS; do
 		# -q quiet, follow redirects, short timeouts so boot is not delayed
 		if wget -q -T20 -O "$DIR/part.tmp" "$url" 2>/dev/null; then
@@ -80,7 +99,13 @@ build()
 
 	# Atomic swap so dnsmasq never reads a half-written file.
 	mv -f "$HOSTS.new" "$HOSTS"
-	log "built $HOSTS with $(wc -l <"$HOSTS") entries"
+
+	local n
+	n=$(wc -l <"$HOSTS" 2>/dev/null | tr -d ' ')
+	log "built $HOSTS with ${n:-0} entries"
+	# Surface the count in the UI; tmpfs is wiped on reboot so it is only a
+	# display value and needs no commit.
+	nvram set adblock_entries="${n:-0} domains blocked"
 }
 
 reload_dnsmasq()

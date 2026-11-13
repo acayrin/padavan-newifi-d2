@@ -133,11 +133,18 @@ function done_validating(action){
                                         </tr>
                                         <tr>
                                             <th width="50%"><#Adblock_Entries#></th>
-                                            <td><% nvram_get_x("", "adblock_enable"); %></td>
+                                            <td><% nvram_get_x("", "adblock_entries"); %></td>
                                         </tr>
                                         <tr>
                                             <th><#Adblock_LastUpdate#></th>
-                                            <td>Refreshed daily at 04:17. Refuses nothing: blocked names resolve to 0.0.0.0 and :: so clients fail fast.</td>
+                                            <td>Refreshed daily at 04:17. Blocked names resolve to 0.0.0.0 and :: instead of being refused, so clients fail fast rather than retrying.</td>
+                                        </tr>
+                                        <tr>
+                                            <th><#Adblock_Lists#></th>
+                                            <td>
+                                                <textarea rows="6" wrap="off" spellcheck="false" maxlength="4096" class="span12" style="resize: vertical; font-family: monospace; font-size: 12px;" name="adblock_lists"><% nvram_get_x("", "adblock_lists"); %></textarea>
+                                                <span style="color:#888;">One hosts-format URL per line. Leave empty for the built-in list.</span>
+                                            </td>
                                         </tr>
                                     </table>
 
