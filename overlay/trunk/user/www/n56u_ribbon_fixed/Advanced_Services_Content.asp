@@ -28,7 +28,6 @@ var $j = jQuery.noConflict();
 $j(document).ready(function() {
 	init_itoggle('telnetd');
 	init_itoggle('sshd_enable_gp');
-	init_itoggle('wins_enable', change_wins_enabled);
 	init_itoggle('crond_enable', change_crond_enabled);
 	init_itoggle('watchdog_cpu');
 	init_itoggle('doh_enable', change_doh_enabled);
@@ -60,10 +59,9 @@ function initial(){
 	}else
 		sshd_auth_change();
 
-	if(found_app_nmbd()){
-		showhide_div('tbl_wins', 1);
-		change_wins_enabled();
-	}
+	// WINS/NMB is not shipped: CONFIG_FIRMWARE_INCLUDE_WINS is off. The row used
+	// to appear anyway because found_app_nmbd() also returns true for a plain
+	// Samba build (APP_SMBD), so the table is removed rather than gated.
 
 	if(!support_http_ssl()) {
 		document.form.http_proto.value = "0";
@@ -372,12 +370,6 @@ function sshd_auth_change(){
 	if (!login_safe())
 		v = 0;
 	textarea_sshd_enabled(v);
-}
-
-function change_wins_enabled(){
-	var v = document.form.wins_enable[0].checked;
-	showhide_div('row_smb_wgrp', v);
-	showhide_div('row_smb_lmb', v);
 }
 
 function change_doh_enabled(){
@@ -730,45 +722,6 @@ function zapret_strategy_change(o, v) {
                                         </tr>
                                     </table>
 
-                                    <table width="100%" cellpadding="4" cellspacing="0" class="table" id="tbl_wins" style="display:none">
-                                        <tr>
-                                            <th colspan="2" style="background-color: #E3E3E3;"><#Adm_Svc_Windows_Internet_Name_Service#></th>
-                                        </tr>
-                                        <tr>
-                                            <th width="50%"><#Adm_Svc_wins#></th>
-                                            <td>
-                                                <div class="main_itoggle">
-                                                    <div id="wins_enable_on_of">
-                                                        <input type="checkbox" id="wins_enable_fake" <% nvram_match_x("", "wins_enable", "1", "value=1 checked"); %><% nvram_match_x("", "wins_enable", "0", "value=0"); %>>
-                                                    </div>
-                                                </div>
-                                                <div style="position: absolute; margin-left: -10000px;">
-                                                    <input type="radio" name="wins_enable" id="wins_enable_1" class="input" value="1" onclick="change_wins_enabled();" <% nvram_match_x("", "wins_enable", "1", "checked"); %>/><#checkbox_Yes#>
-                                                    <input type="radio" name="wins_enable" id="wins_enable_0" class="input" value="0" onclick="change_wins_enabled();" <% nvram_match_x("", "wins_enable", "0", "checked"); %>/><#checkbox_No#>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        <tr id="row_smb_wgrp" style="display:none;">
-                                            <th>
-                                                <a class="help_tooltip" href="javascript:void(0);" onmouseover="openTooltip(this,17, 3);"><#ShareNode_WorkGroup_itemname#></a>
-                                            </th>
-                                            <td>
-                                                <input type="text" name="st_samba_workgroup" class="input" maxlength="32" size="32" value="<% nvram_get_x("", "st_samba_workgroup"); %>"/>
-                                            </td>
-                                        </tr>
-                                        <tr id="row_smb_lmb" style="display:none;">
-                                            <th>
-                                                <#StorageLMB#>
-                                            </th>
-                                            <td>
-                                                <select name="st_samba_lmb" class="input">
-                                                    <option value="0" <% nvram_match_x("", "st_samba_lmb", "0", "selected"); %>><#checkbox_No#></option>
-                                                    <option value="1" <% nvram_match_x("", "st_samba_lmb", "1", "selected"); %>>Local Master Browser (*)</option>
-                                                    <option value="2" <% nvram_match_x("", "st_samba_lmb", "2", "selected"); %>>Local & Domain Master Browser</option>
-                                                </select>
-                                            </td>
-                                        </tr>
-                                    </table>
 
                                     <table width="100%" cellpadding="4" cellspacing="0" class="table" id="tbl_anon" style="display:none">
                                         <tr>
