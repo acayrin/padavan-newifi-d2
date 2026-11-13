@@ -1,0 +1,76 @@
+#!/bin/sh
+# Start tailscaled and bring the node up, surviving a cold boot with no WAN.
+#
+# State lives in /etc/storage/tailscale so it survives reboots: /etc/storage is
+# the mtd5 "Storage" partition, persisted by `mtd_storage.sh save`.
+# Configuration comes from nvram, which also survives reboots and reflash:
+#
+#   ts_enable   1 to start at boot
+#   ts_authkey  auth key, used only on first run (no saved state)
+#   ts_up_args  extra flags for `tailscale up` (e.g. --accept-routes)
+#   ts_daemon_args  extra flags for tailscaled
+#
+# The reason for the loop: on a cold boot there may be no internet yet, and
+# tailscaled then sits in NoState with no backend. Rather than give up, we
+# wait for connectivity and retry, so an unattended reboot still converges.
+
+TS=/tmp/tailscaled
+CLI=/tmp/tailscale
+STATE_DIR=/etc/storage/tailscale
+STATE="$STATE_DIR/tailscaled.state"
+SOCK=/var/run/tailscale/tailscaled.sock
+PIDF=/var/run/tailscaled.pid
+
+[ "$(nvram get ts_enable)" = "1" ] || { logger -t tailscale "disabled (ts_enable != 1)"; exit 0; }
+[ -x "$TS" ] || { logger -t tailscale "no $TS, is the blob expanded?"; exit 1; }
+
+mkdir -p "$STATE_DIR" /var/run/tailscale
+
+# One instance only.
+if [ -f "$PIDF" ] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then
+	logger -t tailscale "already running (pid $(cat "$PIDF"))"
+	exit 0
+fi
+
+# Wait for DNS to resolve. Without this tailscaled logs "NoState" and never
+# reaches Running on a cold boot.
+wait_net() {
+	i=0
+	while [ $i -lt 60 ]; do
+		if nslookup controlplane.tailscale.com >/dev/null 2>&1; then
+			return 0
+		fi
+		i=$((i + 1))
+		sleep 5
+	done
+	return 1
+}
+
+logger -t tailscale "waiting for network"
+wait_net || logger -t tailscale "no network yet, starting anyway"
+logger -t tailscale "starting tailscaled"
+"$TS" --state="$STATE" --socket="$SOCK" $(nvram get ts_daemon_args) >>/tmp/tailscaled.log 2>&1 &
+echo $! > "$PIDF"
+
+# Give the daemon a moment, then bring the node up if it has no identity.
+sleep 5
+[ -x "$CLI" ] || exit 0
+
+if [ -s "$STATE" ]; then
+	# Existing identity: just make sure the backend is up.
+	"$CLI" --socket="$SOCK" up $(nvram get ts_up_args) >/dev/null 2>&1
+	logger -t tailscale "reused saved state"
+else
+	KEY=$(nvram get ts_authkey)
+	if [ -n "$KEY" ]; then
+		"$CLI" --socket="$SOCK" up --authkey="$KEY" $(nvram get ts_up_args) >/dev/null 2>&1 \
+			&& logger -t tailscale "joined with auth key" \
+			|| logger -t tailscale "auth key rejected, will retry"
+	else
+		logger -t tailscale "no state and no ts_authkey, needs \`tailscale up\`"
+	fi
+fi
+
+# Persist the state to mtd5 so the next boot reuses it.
+sync
+mtd_storage.sh save >/dev/null 2>&1
