@@ -22,7 +22,15 @@ SOCK=/var/run/tailscale/tailscaled.sock
 PIDF=/var/run/tailscaled.pid
 
 [ "$(nvram get ts_enable)" = "1" ] || { logger -t tailscale "disabled (ts_enable != 1)"; exit 0; }
-[ -x "$TS" ] || { logger -t tailscale "no $TS, is the blob expanded?"; exit 1; }
+
+# Do not depend on ordering: if the expander has not run yet, run it now.
+# rc.c used to start both in the background and this script lost the race,
+# logging "no /tmp/tailscaled, is the blob expanded?" on every boot.
+if [ ! -x "$TS" ] && [ -x /usr/sbin/tailscaled-boot ]; then
+	logger -t tailscale "expanding blobs first"
+	/usr/sbin/tailscaled-boot
+fi
+[ -x "$TS" ] || { logger -t tailscale "no $TS after expand, giving up"; exit 1; }
 
 mkdir -p "$STATE_DIR" /var/run/tailscale
 
@@ -74,3 +82,22 @@ fi
 # Persist the state to mtd5 so the next boot reuses it.
 sync
 mtd_storage.sh save >/dev/null 2>&1
+
+# The save above only captures the state as it is now. If the node is logged in
+# interactively later (browser auth URL), tailscaled rewrites tailscaled.state
+# afterwards and it would be lost on reboot, forcing a re-login. Watch the file
+# and save again whenever it changes. Backgrounded so boot is not delayed.
+(
+	prev=$(md5sum "$STATE" 2>/dev/null | cut -d' ' -f1)
+	while :; do
+		sleep 120
+		[ -f "$PIDF" ] || exit 0
+		kill -0 "$(cat "$PIDF" 2>/dev/null)" 2>/dev/null || exit 0
+		cur=$(md5sum "$STATE" 2>/dev/null | cut -d' ' -f1)
+		if [ -n "$cur" ] && [ "$cur" != "$prev" ]; then
+			logger -t tailscale "state changed, saving to mtd5"
+			mtd_storage.sh save >/dev/null 2>&1
+			prev=$cur
+		fi
+	done
+) >/dev/null 2>&1 &

@@ -924,8 +924,12 @@ init_router(void)
 	// from a storage script because init never runs
 	// "mtd_storage.sh load" (strings /sbin/init shows only save/erase), so
 	// hooks placed in func_start_apps() never fire on a normal boot.
+	// Expand the blobs first and *wait*: running this in the background raced
+	// with tailscale-init, which then logged
+	//   "no /tmp/tailscaled, is the blob expanded?"
+	// and gave up on every boot. Decompressing ~44 MB takes a few seconds.
 	if (access("/usr/sbin/tailscaled-boot", X_OK) == 0)
-		system("/usr/sbin/tailscaled-boot &");
+		system("/usr/sbin/tailscaled-boot");
 	// Then start it, unless ts_enable is unset. The init script waits for
 	// connectivity and retries, so a cold boot with no WAN converges.
 	if (access("/usr/sbin/tailscale-init", X_OK) == 0)
