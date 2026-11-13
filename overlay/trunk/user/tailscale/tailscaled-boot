@@ -1,55 +1,57 @@
 #!/bin/sh
-# Expand the compressed tailscaled into tmpfs at boot.
+# Expand the compressed tailscale binaries into tmpfs at boot.
 #
-# The binary is ~19.8 MB raw and cannot live on the read-only squashfs, so
-# only the ~6.2 MB gzip blob is stored and unpacked into RAM.
+# tailscaled is 19.8 MB raw and the CLI 24.0 MB; neither fits the read-only
+# squashfs, so only the gzip blobs (~14.6 MB together) are stored.
 #
-# /tmp is a 24 MB tmpfs, so two concurrent runs (rc.c and a storage script)
-# each try to write 19.8 MB and both die with "No space left on device".
-# Serialize with a lock and write to a temp file that is removed on failure.
+# /tmp is a 24 MB tmpfs by default and the two binaries need ~44 MB, so it is
+# remounted larger. Two concurrent callers would otherwise both fail with
+# "No space left on device" (seen in /tmp/syslog.log as "decompress failed"),
+# so serialize with an mkdir lock.
 
-XB=/usr/sbin/tailscaled.gz
-TB=/tmp/tailscaled
+TS=/tmp/tailscaled
+CLI=/tmp/tailscale
 LOCK=/tmp/.tailscaled-boot.lock
 
-[ -x "$TB" ] && exit 0
-[ -f "$XB" ] || exit 0
+[ -x "$TS" ] && [ -x "$CLI" ] && exit 0
+
+expand() {
+	_gz=$1; _out=$2; _tmp="$_out.$$"
+	[ -f "$_gz" ] || return 0
+	[ -x "$_out" ] && return 0
+	rm -f "$_tmp"
+	if gzip -dc "$_gz" > "$_tmp"; then
+		chmod 0755 "$_tmp"
+		mv -f "$_tmp" "$_out"
+		logger -t tailscale "expanded $_out"
+	else
+		rm -f "$_tmp"
+		logger -t tailscale "decompress failed for $_gz"
+		return 1
+	fi
+}
 
 # mkdir is atomic, so it works as a lock without extra tools.
-acquire() {
-	i=0
-	while ! mkdir "$LOCK" 2>/dev/null; do
-		# winner finished already
-		[ -x "$TB" ] && exit 0
-		i=$((i + 1))
-		[ $i -gt 60 ] && rm -rf "$LOCK" && break
-		sleep 1
-	done
-}
-release() { rmdir "$LOCK" 2>/dev/null; }
-trap release EXIT
-
-acquire
+i=0
+while ! mkdir "$LOCK" 2>/dev/null; do
+	[ -x "$TS" ] && [ -x "$CLI" ] && exit 0
+	i=$((i + 1))
+	[ $i -gt 90 ] && rm -rf "$LOCK" && break
+	sleep 1
+done
+trap 'rmdir "$LOCK" 2>/dev/null' EXIT
 
 # Re-check after taking the lock: the other process may have finished it.
-[ -x "$TB" ] && exit 0
+[ -x "$TS" ] && [ -x "$CLI" ] && exit 0
 
-# Make room. The blob unpacks to ~19.8 MB and /tmp is 24 MB by default,
-# which is too tight once anything else is in there.
+# ~44 MB of binaries; grow /tmp when it is not already big enough.
 free=$(df -k /tmp 2>/dev/null | awk 'NR==2 {print $4}')
-if [ -z "$free" ] || [ "$free" -lt 22528 ]; then
+if [ -z "$free" ] || [ "$free" -lt 47104 ]; then
 	mount -o remount,size=192M /tmp 2>/dev/null || \
 		mount -t tmpfs -o size=192M tmpfs /tmp 2>/dev/null
 fi
 
-TMP="$TB.$$"
-rm -f "$TMP"
-if gzip -dc "$XB" > "$TMP"; then
-	chmod 0755 "$TMP"
-	mv -f "$TMP" "$TB"
-	logger -t tailscale "tailscaled expanded to $TB"
-else
-	rm -f "$TMP"
-	logger -t tailscale "decompress failed"
-	exit 1
-fi
+mkdir -p /var/run/tailscale
+expand /usr/sbin/tailscaled.gz "$TS" || exit 1
+expand /usr/sbin/tailscale.gz "$CLI"
+exit 0

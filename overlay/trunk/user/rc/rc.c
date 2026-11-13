@@ -926,6 +926,10 @@ init_router(void)
 	// hooks placed in func_start_apps() never fire on a normal boot.
 	if (access("/usr/sbin/tailscaled-boot", X_OK) == 0)
 		system("/usr/sbin/tailscaled-boot &");
+	// Then start it, unless ts_enable is unset. The init script waits for
+	// connectivity and retries, so a cold boot with no WAN converges.
+	if (access("/usr/sbin/tailscale-init", X_OK) == 0)
+		system("/usr/sbin/tailscale-init &");
 }
 
 /*

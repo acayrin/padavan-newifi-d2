@@ -11,6 +11,14 @@ on:
         description: 'sha256 of that binary; verified when provided'
         required: false
         type: string
+      ts_cli_url:
+        description: 'Direct URL of the tailscale CLI mipsle binary. Optional; needed for `tailscale up --authkey` persistence.'
+        required: false
+        type: string
+      ts_cli_sha256:
+        description: 'sha256 of the CLI binary; verified when provided'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -21,7 +29,7 @@ env:
 
 jobs:
   build:
-    name: Padavan NEWIFI-D2 (English + tailscaled + custom bg)
+    name: Padavan NEWIFI-D2 (English + tailscale + custom bg)
     runs-on: ubuntu-22.04
     timeout-minutes: 360
 
@@ -78,6 +86,15 @@ jobs:
           # stored raw in the tree; the package Makefile xz-compresses it into
           # the image (~4.4 MB) and tailscaled-boot expands it at boot
           install -m 0755 /tmp/tailscaled src/trunk/user/tailscale/tailscaled
+          if [ -n "${{ inputs.ts_cli_url }}" ]; then
+            curl -fsSL -o /tmp/tailscale "${{ inputs.ts_cli_url }}"
+            if [ -n "${{ inputs.ts_cli_sha256 }}" ]; then
+              echo "${{ inputs.ts_cli_sha256 }}  /tmp/tailscale" | sha256sum -c -
+            fi
+            install -m 0755 /tmp/tailscale src/trunk/user/tailscale/tailscale
+          else
+            echo "no ts_cli_url: shipping the daemon only (no tailscale up)"
+          fi
           ls -l src/trunk/user/tailscale/
 
       - name: Drop tailscale pkg when no binary
